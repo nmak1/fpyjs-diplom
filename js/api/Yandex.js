@@ -208,3 +208,5 @@ class Yandex {
     });
   }
 }
+
+export default Yandex;

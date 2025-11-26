@@ -1,79 +1,89 @@
 <!DOCTYPE html>
 <html lang="ru">
-  <head>
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Резервное копирование</title>
-    <link rel="stylesheet" type="text/css" href="semantic/semantic.min.css">
-    <link rel="stylesheet" type="text/css" href="css/styles.css">
-  </head>
-  <body>
+    <title>VK Photos to Yandex.Disk</title>
+    <link rel="stylesheet" href="semantic/semantic.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
     <div class="ui container">
-      <header class="ui header">
-        <h1 class="ui heading neon">Резервное копирование изображений</h1>
-      </header>
-      <div class="ui grid">
-        <div class="row">
-          <div class="column ten wide">
-            <div class="ui large action input search-block">
-              <input type="text" placeholder="Введите id пользователя">
-              <button class="ui primary button replace">Заменить</button>
-              <button class="ui primary button add">Добавить</button>
+        <!-- Блок поиска -->
+        <div class="search-block ui segment">
+            <h2 class="ui header">Загрузка фото из VK</h2>
+            <div class="ui form">
+                <div class="field">
+                    <label>ID пользователя VK:</label>
+                    <div class="ui action input">
+                        <input type="text" placeholder="Введите ID или screen_name..." class="search-input">
+                        <button class="ui button replace-button">Заменить</button>
+                        <button class="ui button add-button">Добавить</button>
+                        <button class="ui button clear-button">Очистить</button>
+                    </div>
+                </div>
             </div>
-          </div>
+            <div class="selection-counter" style="display: none;"></div>
         </div>
-        <div class="row images-wrapper">
-          <div class="column ten wide images-list">
-            <div class="ui grid">
-              <div class="row">
-              </div>
-              <div class="row">
-                <button class="ui disabled primary button select-all">Выбрать всё</button>
-                <button class="ui primary button show-uploaded-files">Посмотреть загруженные файлы</button>
-                <button class="ui primary disabled button send">Отправить на диск</button>
-              </div>
+
+        <!-- Панель управления -->
+        <div class="ui segment control-panel">
+            <div class="ui buttons">
+                <button class="ui button select-all-button">
+                    <i class="check square icon"></i>Выделить все
+                </button>
+                <button class="ui button upload-button" disabled>
+                    <i class="cloud upload icon"></i>Отправить на диск
+                </button>
+                <button class="ui button view-uploaded-button">
+                    <i class="folder open icon"></i>Посмотреть загруженные файлы
+                </button>
             </div>
-          </div>
-          <div class="column six wide">
-            <img class="ui fluid image" src="https://yugcleaning.ru/wp-content/themes/consultix/images/no-image-found-360x250.png">
-          </div>
         </div>
-      </div>
+
+        <!-- Блок изображений -->
+        <div class="images-wrapper ui segment">
+            <div class="ui placeholder segment" style="text-align: center; padding: 40px;">
+                <div class="ui icon header">
+                    <i class="image outline icon"></i>
+                    Нет изображений для отображения
+                </div>
+                <p>Введите ID пользователя VK чтобы загрузить фотографии</p>
+            </div>
+        </div>
     </div>
+
+    <!-- Модальное окно загрузки файлов -->
     <div class="ui modal file-uploader-modal">
-      <div class="header">Загрузка файлов <i class="x icon"></i></div>
-      <div class="scrolling content">
-      </div>
-      <div class="actions">
-        <div class="ui close button">Закрыть</div>
-        <div class="ui send-all button">Отправить все файлы</div>
-      </div>
+        <i class="close icon"></i>
+        <div class="header">Загрузка изображений на Яндекс.Диск</div>
+        <div class="content">
+            <div class="images-container"></div>
+        </div>
+        <div class="actions">
+            <div class="ui button deny-button">Закрыть</div>
+            <div class="ui primary button send-all-button">Отправить все файлы</div>
+        </div>
     </div>
+
+    <!-- Модальное окно просмотра загруженных файлов -->
     <div class="ui modal uploaded-previewer-modal">
-      <div class="header">Просмотр загруженных файлов<i class="x icon"></i></div>
-      <div class="scrolling content">
-        <i class="asterisk loading icon massive"></i>
-      </div>
+        <i class="close icon"></i>
+        <div class="header">Загруженные файлы</div>
+        <div class="content">
+            <div class="images-container"></div>
+        </div>
+        <div class="actions">
+            <div class="ui button">Закрыть</div>
+        </div>
     </div>
-    <script
-      src="https://code.jquery.com/jquery-3.1.1.min.js"
-      integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
-      crossorigin="anonymous"></script>
+
+    <!-- jQuery должен быть загружен ПЕРВЫМ -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Semantic UI зависит от jQuery -->
     <script src="semantic/semantic.min.js"></script>
-    <script src="js/api/createRequest.js"></script>
-    <script src="js/api/VK.js"></script>
-    <script src="js/api/Yandex.js"></script>
 
-
-    <script src="js/ui/SearchBlock.js"></script>
-    <script src="js/ui/ImageViewer.js"></script>
-    <script src="js/ui/Modals/BaseModal.js"></script>
-    <script src="js/ui/Modals/FileUploaderModal.js"></script>
-    <script src="js/ui/Modals/PreviewModal.js"></script>
-    <script src="js/App.js"></script>
-
-    <script>
-      App.init();
-    </script>
-  </body>
+    <!-- Основное приложение -->
+    <script type="module" src="js/main.js"></script>
+</body>
 </html>

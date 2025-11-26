@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Imports</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        .test-section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тестирование импортов модулей</h1>
+
+    <div class="test-section">
+        <h3>1. Проверка основных классов:</h3>
+        <div id="class-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Проверка методов:</h3>
+        <div id="method-test"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Действия для тестирования:</h3>
+        <button onclick="testVKImport()">Тест VK API</button>
+        <button onclick="testYandexImport()">Тест Yandex API</button>
+        <button onclick="testAppInit()">Тест инициализации App</button>
+    </div>
+
+    <div id="output"></div>
+
+    <script type="module">
+        import App from './js/App.js';
+        import VK from './js/api/VK.js';
+        import Yandex from './js/api/Yandex.js';
+
+        // Делаем глобальными для тестирования
+        window.App = App;
+        window.VK = VK;
+        window.Yandex = Yandex;
+
+        const classTest = document.getElementById('class-test');
+        const methodTest = document.getElementById('method-test');
+
+        // Тест классов
+        try {
+            let html = '';
+
+            // Проверка классов
+            if (typeof App === 'function') {
+                html += `<p class="success">✅ App класс загружен</p>`;
+            } else {
+                html += `<p class="error">❌ App класс не загружен</p>`;
+            }
+
+            if (typeof VK === 'function') {
+                html += `<p class="success">✅ VK класс загружен</p>`;
+            } else {
+                html += `<p class="error">❌ VK класс не загружен</p>`;
+            }
+
+            if (typeof Yandex === 'function') {
+                html += `<p class="success">✅ Yandex класс загружен</p>`;
+            } else {
+                html += `<p class="error">❌ Yandex класс не загружен</p>`;
+            }
+
+            classTest.innerHTML = html;
+
+        } catch (error) {
+            classTest.innerHTML = `<p class="error">❌ Ошибка: ${error.message}</p>`;
+        }
+
+        // Тест методов
+        try {
+            let html = '';
+
+            if (typeof App.init === 'function') {
+                html += `<p class="success">✅ App.init метод доступен</p>`;
+            } else {
+                html += `<p class="error">❌ App.init метод недоступен</p>`;
+            }
+
+            if (typeof VK.get === 'function') {
+                html += `<p class="success">✅ VK.get метод доступен</p>`;
+            } else {
+                html += `<p class="error">❌ VK.get метод недоступен</p>`;
+            }
+
+            if (typeof Yandex.uploadFile === 'function') {
+                html += `<p class="success">✅ Yandex.uploadFile метод доступен</p>`;
+            } else {
+                html += `<p class="error">❌ Yandex.uploadFile метод недоступен</p>`;
+            }
+
+            methodTest.innerHTML = html;
+
+        } catch (error) {
+            methodTest.innerHTML = `<p class="error">❌ Ошибка методов: ${error.message}</p>`;
+        }
+
+        // Глобальные функции для тестирования
+        window.testVKImport = async function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>🔄 Тестируем VK API...</p>';
+
+            try {
+                const photos = await VK.get('1');
+                output.innerHTML = `<p class="success">✅ VK API работает! Получено фото: ${photos ? photos.length : 0}</p>`;
+                console.log('VK test result:', photos);
+            } catch (error) {
+                output.innerHTML = `<p class="error">❌ VK API ошибка: ${error.message}</p>`;
+            }
+        };
+
+        window.testYandexImport = async function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>🔄 Тестируем Yandex API...</p>';
+
+            try {
+                const files = await Yandex.getUploadedFiles();
+                output.innerHTML = `<p class="success">✅ Yandex API работает! Файлов: ${files ? files.length : 0}</p>`;
+                console.log('Yandex test result:', files);
+            } catch (error) {
+                output.innerHTML = `<p class="error">❌ Yandex API ошибка: ${error.message}</p>`;
+            }
+        };
+
+        window.testAppInit = function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>🔄 Тестируем инициализацию App...</p>';
+
+            try {
+                App.init();
+                output.innerHTML = '<p class="success">✅ App инициализирован успешно!</p>';
+            } catch (error) {
+                output.innerHTML = `<p class="error">❌ Ошибка инициализации App: ${error.message}</p>`;
+            }
+        };
+
+    </script>
+</body>
+</html>

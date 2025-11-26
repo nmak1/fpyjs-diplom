@@ -246,3 +246,5 @@ class VK {
     });
   }
 }
+
+export default VK;

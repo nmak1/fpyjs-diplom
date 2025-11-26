@@ -38,21 +38,34 @@ class App {
    * Инициализирует всплывающие окна
    */
   static initModals() {
+    // Получаем DOM элементы модальных окон
+    const fileUploaderElement = document.querySelector('.file-uploader-modal');
+    const filePreviewerElement = document.querySelector('.uploaded-previewer-modal');
+
+    if (!fileUploaderElement || !filePreviewerElement) {
+      console.error('Modal elements not found in DOM');
+      return;
+    }
+
+    // Инициализируем Semantic UI модальные окна
+    $(fileUploaderElement).modal({
+      closable: false,
+      onHide: () => this.onFileUploaderClose()
+    });
+
+    $(filePreviewerElement).modal({
+      closable: false,
+      onApprove: () => this.onPreviewApprove(),
+      onDeny: () => this.onPreviewDeny()
+    });
+
+    // Создаем экземпляры наших классов модальных окон
     this.modals = {
-      fileUploader: new FileUploaderModal(
-        $('.ui.modal.file-uploader-modal').modal({
-          closable: false,
-          onHide: () => this.onFileUploaderClose()
-        })
-      ),
-      filePreviewer: new PreviewModal(
-        $('.ui.modal.uploaded-previewer-modal').modal({
-          closable: false,
-          onApprove: () => this.onPreviewApprove(),
-          onDeny: () => this.onPreviewDeny()
-        })
-      ),
+      fileUploader: new FileUploaderModal(fileUploaderElement),
+      filePreviewer: new PreviewModal(filePreviewerElement),
     };
+
+    console.log('Modals initialized:', this.modals);
   }
 
   /**
@@ -71,8 +84,10 @@ class App {
    */
   static showModal(name, data = {}) {
     const modal = this.getModal(name);
-    if (modal && modal.show) {
-      modal.show(data);
+    if (modal) {
+      modal.open(data);
+    } else {
+      console.error(`Modal '${name}' not found for showing`);
     }
   }
 
@@ -81,8 +96,10 @@ class App {
    */
   static hideModal(name) {
     const modal = this.getModal(name);
-    if (modal && modal.hide) {
-      modal.hide();
+    if (modal) {
+      modal.close();
+    } else {
+      console.error(`Modal '${name}' not found for hiding`);
     }
   }
 
@@ -110,7 +127,6 @@ class App {
   static setupErrorHandling() {
     window.addEventListener('unhandledrejection', (event) => {
       console.error('Unhandled promise rejection:', event.reason);
-      // Можно показать уведомление пользователю
       this.showErrorNotification('Произошла ошибка при выполнении операции');
     });
 
@@ -124,11 +140,15 @@ class App {
    */
   static showErrorNotification(message) {
     // Используем Semantic UI для показа уведомлений
-    $('body').toast({
-      class: 'error',
-      message: message,
-      showIcon: 'exclamation circle'
-    });
+    if (typeof $ !== 'undefined') {
+      $('body').toast({
+        class: 'error',
+        message: message,
+        showIcon: 'exclamation circle'
+      });
+    } else {
+      console.error('Error notification:', message);
+    }
   }
 
   /**
@@ -166,7 +186,7 @@ class App {
     // Закрываем все модальные окна
     if (this.modals) {
       Object.values(this.modals).forEach(modal => {
-        if (modal.hide) modal.hide();
+        if (modal.close) modal.close();
       });
     }
 
@@ -183,3 +203,5 @@ class App {
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
+
+export default App;

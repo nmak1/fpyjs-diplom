@@ -3,6 +3,7 @@
  */
 const createRequest = (options = {}) => {
     return new Promise((resolve, reject) => {
+        // Проверка обязательных параметров
         if (!options.url) {
             const error = new Error('URL is required');
             if (options.callback) options.callback(error, null);
@@ -33,7 +34,7 @@ const createRequest = (options = {}) => {
             });
         }
 
-        // Для POST/PUT запросов
+        // Для POST/PUT запросов устанавливаем Content-Type по умолчанию
         if ((options.method === 'POST' || options.method === 'PUT') && options.data) {
             if (!options.headers || !options.headers['Content-Type']) {
                 xhr.setRequestHeader('Content-Type', 'application/json');
@@ -43,9 +44,14 @@ const createRequest = (options = {}) => {
         xhr.onload = function() {
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
-                    const response = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                    let response = null;
 
-                    // Поддержка callback для обратной совместимости
+                    // Обрабатываем пустой ответ или ответ с текстом
+                    if (xhr.responseText) {
+                        response = JSON.parse(xhr.responseText);
+                    }
+
+                    // Вызываем callback если он предоставлен
                     if (options.callback && typeof options.callback === 'function') {
                         options.callback(null, response);
                     }
@@ -65,17 +71,19 @@ const createRequest = (options = {}) => {
                 let errorResponse = null;
 
                 try {
-                    errorResponse = xhr.responseText ? JSON.parse(xhr.responseText) : null;
-                    if (errorResponse && errorResponse.message) {
-                        errorMessage = errorResponse.message;
+                    if (xhr.responseText) {
+                        errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse && errorResponse.error) {
+                            errorMessage = errorResponse.error.error_msg || errorResponse.error.message || errorMessage;
+                        }
                     }
                 } catch (e) {
-                    // Игнорируем ошибки парсинга
+                    // Если не удалось распарсить ошибку, используем стандартное сообщение
                 }
 
                 const error = new Error(errorMessage);
-                error.response = errorResponse;
                 error.status = xhr.status;
+                error.response = errorResponse;
 
                 if (options.callback && typeof options.callback === 'function') {
                     options.callback(error, null);
@@ -86,7 +94,7 @@ const createRequest = (options = {}) => {
         };
 
         xhr.onerror = function() {
-            const error = new Error('Network error occurred');
+            const error = new Error('Network error occurred. Check CORS settings or network connection.');
 
             if (options.callback && typeof options.callback === 'function') {
                 options.callback(error, null);
@@ -105,13 +113,21 @@ const createRequest = (options = {}) => {
             reject(error);
         };
 
+        // Устанавливаем таймаут (по умолчанию 30 секунд)
         xhr.timeout = options.timeout || 30000;
 
+        // Отправляем запрос
         try {
             if ((options.method === 'POST' || options.method === 'PUT') && options.data) {
-                const body = options.headers && options.headers['Content-Type'] === 'application/json'
-                    ? JSON.stringify(options.data)
-                    : options.data;
+                // Определяем тип тела запроса
+                let body;
+                if (options.headers && options.headers['Content-Type'] === 'application/json') {
+                    body = JSON.stringify(options.data);
+                } else if (options.headers && options.headers['Content-Type'] === 'application/x-www-form-urlencoded') {
+                    body = new URLSearchParams(options.data).toString();
+                } else {
+                    body = options.data;
+                }
                 xhr.send(body);
             } else {
                 xhr.send();
@@ -124,3 +140,95 @@ const createRequest = (options = {}) => {
         }
     });
 };
+
+// Вспомогательные функции для конкретных API
+
+/**
+ * Создает запрос для VK API
+ */
+createRequest.vk = (method, params = {}, callback) => {
+    return createRequest({
+        url: `https://api.vk.com/method/${method}`,
+        method: 'GET',
+        params: {
+            ...params,
+            v: '5.131'
+        },
+        callback
+    });
+};
+
+/**
+ * Создает запрос для Yandex Disk API
+ */
+createRequest.yandex = (endpoint, options = {}, callback) => {
+    const token = localStorage.getItem('yandexToken');
+
+    if (!token) {
+        const error = new Error('Yandex token is not set');
+        if (callback) callback(error, null);
+        return Promise.reject(error);
+    }
+
+    return createRequest({
+        url: `https://cloud-api.yandex.net/v1/disk${endpoint}`,
+        method: options.method || 'GET',
+        headers: {
+            'Authorization': `OAuth ${token}`,
+            ...options.headers
+        },
+        params: options.params,
+        data: options.data,
+        callback
+    });
+};
+
+/**
+ * Упрощенная версия для GET запросов
+ */
+createRequest.get = (url, params = {}, callback) => {
+    return createRequest({
+        url,
+        method: 'GET',
+        params,
+        callback
+    });
+};
+
+/**
+ * Упрощенная версия для POST запросов
+ */
+createRequest.post = (url, data = {}, callback) => {
+    return createRequest({
+        url,
+        method: 'POST',
+        data,
+        callback
+    });
+};
+
+/**
+ * Упрощенная версия для PUT запросов
+ */
+createRequest.put = (url, data = {}, callback) => {
+    return createRequest({
+        url,
+        method: 'PUT',
+        data,
+        callback
+    });
+};
+
+/**
+ * Упрощенная версия для DELETE запросов
+ */
+createRequest.delete = (url, params = {}, callback) => {
+    return createRequest({
+        url,
+        method: 'DELETE',
+        params,
+        callback
+    });
+};
+
+export default createRequest;
