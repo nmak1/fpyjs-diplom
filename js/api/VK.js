@@ -11,35 +11,64 @@ class VK {
   static BASE_URL = 'https://api.vk.com/method';
 
   /**
-   * Получает изображения из профиля пользователя VK
-   * @param {string|number} id - ID пользователя или короткое имя
-   * @param {Function} callback - Функция обратного вызова
+   * Получает изображения
    */
   static get(id = '', callback) {
-    // Сохраняем callback для использования в JSONP
+    // Сохраняем callback для обратной совместимости
     this.lastCallback = callback;
 
     try {
-      // Если ID не указан, получаем фото текущего пользователя
       const ownerId = this.parseUserId(id);
 
-      // Создаем запрос к VK API
-      this.makeRequest('photos.get', {
-        owner_id: ownerId,
-        album_id: 'profile',
-        rev: 1,
-        extended: 1,
-        photo_sizes: 1,
-        count: 1000
+      // Используем createRequest вместо fetch
+      return createRequest({
+        url: `${this.BASE_URL}/photos.get`,
+        method: 'GET',
+        params: {
+          owner_id: ownerId,
+          album_id: 'profile',
+          access_token: this.ACCESS_TOKEN,
+          v: this.API_VERSION,
+          rev: 1,
+          extended: 1,
+          photo_sizes: 1,
+          count: 1000
+        },
+        callback: callback ? (error, data) => {
+          if (error) {
+            callback(error, null);
+            return;
+          }
+
+          // Обрабатываем ответ VK API
+          if (data.error) {
+            const vkError = new Error(`VK API Error: ${data.error.error_msg} (code: ${data.error.error_code})`);
+            callback(vkError, null);
+            return;
+          }
+
+          try {
+            const photos = this.processPhotos(data.response);
+            callback(null, photos);
+          } catch (processError) {
+            callback(processError, null);
+          }
+        } : undefined
       }).then(data => {
+        // Promise-версия обработки
+        if (data.error) {
+          throw new Error(`VK API Error: ${data.error.error_msg} (code: ${data.error.error_code})`);
+        }
+
         const photos = this.processPhotos(data.response);
-        callback(null, photos);
-      }).catch(error => {
-        callback(error, null);
+        return photos;
       });
 
     } catch (error) {
-      callback(error, null);
+      if (callback) {
+        callback(error, null);
+      }
+      return Promise.reject(error);
     }
   }
 
@@ -65,51 +94,6 @@ class VK {
   }
 
   /**
-   * Выполняет запрос к VK API
-   */
-  static async makeRequest(method, params = {}) {
-    const url = new URL(`${this.BASE_URL}/${method}`);
-
-    // Добавляем обязательные параметры
-    const allParams = {
-      access_token: this.ACCESS_TOKEN,
-      v: this.API_VERSION,
-      ...params
-    };
-
-    // Добавляем параметры в URL
-    Object.keys(allParams).forEach(key => {
-      if (allParams[key] !== undefined && allParams[key] !== null) {
-        url.searchParams.append(key, allParams[key]);
-      }
-    });
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Проверяем наличие ошибки VK API
-      if (data.error) {
-        throw new Error(`VK API Error: ${data.error.error_msg} (code: ${data.error.error_code})`);
-      }
-
-      return data;
-
-    } catch (error) {
-      console.error('VK API request failed:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Обрабатывает полученные фотографии
    */
   static processPhotos(response) {
@@ -125,12 +109,9 @@ class VK {
       comments: photo.comments ? photo.comments.count : 0,
       reposts: photo.reposts ? photo.reposts.count : 0,
       sizes: photo.sizes,
-      // Получаем URL изображения максимального качества
       url: this.getBestQualityPhoto(photo.sizes),
-      // Дополнительные URL для разных размеров
       thumb: this.getThumbnailPhoto(photo.sizes),
       medium: this.getMediumQualityPhoto(photo.sizes),
-      // Текст описания если есть
       text: photo.text || ''
     }));
   }
@@ -148,7 +129,6 @@ class VK {
       }
     }
 
-    // Если не нашли по типам, возвращаем самый большой по ширине
     return sizes.reduce((largest, current) =>
       current.width > largest.width ? current : largest
     ).url;
@@ -181,35 +161,44 @@ class VK {
   /**
    * Получает информацию о пользователе
    */
-  static async getUserInfo(userId) {
-    try {
-      const data = await this.makeRequest('users.get', {
-        user_ids: userId,
-        fields: 'photo_max,photo_max_orig,domain'
-      });
+  static getUserInfo(userId, callback) {
+    return createRequest({
+      url: `${this.BASE_URL}/users.get`,
+      method: 'GET',
+      params: {
+        user_ids: this.parseUserId(userId),
+        access_token: this.ACCESS_TOKEN,
+        v: this.API_VERSION,
+        fields: 'photo_max,photo_max_orig,domain,first_name,last_name'
+      },
+      callback: callback ? (error, data) => {
+        if (error) {
+          callback(error, null);
+          return;
+        }
+
+        if (data.error) {
+          callback(new Error(`VK API Error: ${data.error.error_msg}`), null);
+          return;
+        }
+
+        if (data.response && data.response.length > 0) {
+          callback(null, data.response[0]);
+        } else {
+          callback(new Error('User not found'), null);
+        }
+      } : undefined
+    }).then(data => {
+      if (data.error) {
+        throw new Error(`VK API Error: ${data.error.error_msg}`);
+      }
 
       if (data.response && data.response.length > 0) {
         return data.response[0];
       }
 
       throw new Error('User not found');
-    } catch (error) {
-      console.error('Failed to get user info:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Проверяет валидность токена
-   */
-  static async validateToken() {
-    try {
-      await this.makeRequest('users.get', {});
-      return true;
-    } catch (error) {
-      console.error('Token validation failed:', error);
-      return false;
-    }
+    });
   }
 
   /**
@@ -218,49 +207,42 @@ class VK {
   static getAlbumPhotos(userId, albumId = 'profile', callback) {
     this.lastCallback = callback;
 
-    this.makeRequest('photos.get', {
-      owner_id: this.parseUserId(userId),
-      album_id: albumId,
-      extended: 1,
-      photo_sizes: 1,
-      count: 1000
+    return createRequest({
+      url: `${this.BASE_URL}/photos.get`,
+      method: 'GET',
+      params: {
+        owner_id: this.parseUserId(userId),
+        album_id: albumId,
+        access_token: this.ACCESS_TOKEN,
+        v: this.API_VERSION,
+        extended: 1,
+        photo_sizes: 1,
+        count: 1000
+      },
+      callback: callback ? (error, data) => {
+        if (error) {
+          callback(error, null);
+          return;
+        }
+
+        if (data.error) {
+          callback(new Error(`VK API Error: ${data.error.error_msg}`), null);
+          return;
+        }
+
+        try {
+          const photos = this.processPhotos(data.response);
+          callback(null, photos);
+        } catch (processError) {
+          callback(processError, null);
+        }
+      } : undefined
     }).then(data => {
-      const photos = this.processPhotos(data.response);
-      callback(null, photos);
-    }).catch(error => {
-      callback(error, null);
-    });
-  }
-
-  /**
-   * Ищет фотографии по тегу или описанию
-   */
-  static searchPhotos(userId, query, callback) {
-    this.lastCallback = callback;
-
-    // Сначала получаем все фото, затем фильтруем локально
-    this.get(userId, (error, photos) => {
-      if (error) {
-        callback(error, null);
-        return;
+      if (data.error) {
+        throw new Error(`VK API Error: ${data.error.error_msg}`);
       }
 
-      const filteredPhotos = photos.filter(photo =>
-        photo.text && photo.text.toLowerCase().includes(query.toLowerCase())
-      );
-
-      callback(null, filteredPhotos);
+      return this.processPhotos(data.response);
     });
-  }
-}
-
-export default VK;
-
-  /**
-   * Передаётся в запрос VK API для обработки ответа.
-   * Является обработчиком ответа от сервера.
-   */
-  static processData(result){
-
   }
 }
