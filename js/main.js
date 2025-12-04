@@ -88,28 +88,42 @@ function testAppFunctionality() {
 }
 
 
-window.testVKJsonp = function(userId = '1') {
-    console.log(`🧪 Тестируем VK API с JSONP для userId: ${userId}`);
+// Тестовая функция для проверки
+window.testVKJsonpSimple = function(userId = '1') {
+    console.log(`Тестируем чистый JSONP для userId: ${userId}`);
 
-    // Прямой тест JSONP
-    const callbackName = 'test_vk_callback_' + Date.now();
-
+    // Создаем тег script
     const script = document.createElement('script');
+    const callbackName = 'test_vk_jsonp_' + Date.now();
+
+    // Формируем URL
     const url = `https://api.vk.com/method/users.get?user_ids=${userId}&v=5.131&callback=${callbackName}`;
 
     script.src = url;
+    script.type = 'text/javascript';
 
+    // Глобальная callback функция
     window[callbackName] = function(response) {
-        console.log('✅ JSONP работает! Ответ:', response);
+        console.log('✅ JSONP ответ:', response);
+
+        // Удаляем callback
         delete window[callbackName];
-        document.body.removeChild(script);
+
+        // Удаляем тег script
+        if (script.parentNode) {
+            script.parentNode.removeChild(script);
+        }
     };
 
+    // Обработчик ошибок
     script.onerror = function() {
-        console.error('❌ JSONP не работает');
+        console.error('❌ JSONP ошибка');
         delete window[callbackName];
-        document.body.removeChild(script);
+        if (script.parentNode) {
+            script.parentNode.removeChild(script);
+        }
     };
 
+    // Добавляем в документ
     document.body.appendChild(script);
 };

@@ -57,7 +57,7 @@ class SearchBlock {
   /**
    * Обработчик кнопки "Заменить"
    */
-  async handleReplace() {
+  handleReplace() {
     const userId = this.getInputValue();
 
     if (!this.validateInput(userId)) {
@@ -66,60 +66,63 @@ class SearchBlock {
 
     this.currentUserId = userId;
 
-    try {
-      // Показываем лоадер
-      this.showLoader('Загрузка изображений...');
+    // Показываем лоадер
+    this.showLoader('Загрузка изображений...');
 
-      // Очищаем предыдущие изображения
-      const imageViewer = App.getImageViewer();
-      if (imageViewer) {
-        imageViewer.clear();
-      }
+    // Очищаем предыдущие изображения
+    const imageViewer = App.getImageViewer();
+    if (imageViewer) {
+      imageViewer.clear();
+    }
 
-      // Получаем изображения из VK
-      const images = await VK.get(userId);
-
+    // Получаем изображения из VK через callback
+    VK.get(userId, (error, images) => {
       // Скрываем лоадер
       this.hideLoader();
 
+      if (error) {
+        console.error('Error loading images:', error);
+        this.showError(`Ошибка загрузки: ${error.message}`);
+        return;
+      }
+
       // Отрисовываем изображения
-      if (imageViewer) {
+      if (imageViewer && images) {
         imageViewer.drawImages(images);
       }
 
       // Показываем успешный результат
-      this.showSuccess(`Загружено ${images.length} изображений из профиля VK`);
-
-    } catch (error) {
-      this.hideLoader();
-      console.error('Error loading images:', error);
-      this.showError(`Ошибка загрузки: ${error.message}`);
-    }
+      this.showSuccess(`Загружено ${images ? images.length : 0} изображений из профиля VK`);
+    });
   }
 
   /**
    * Обработчик кнопки "Добавить"
    */
-  async handleAdd() {
+  handleAdd() {
     const userId = this.getInputValue();
 
     if (!this.validateInput(userId)) {
       return;
     }
 
-    try {
-      // Показываем лоадер
-      this.showLoader('Добавление изображений...');
+    // Показываем лоадер
+    this.showLoader('Добавление изображений...');
 
-      // Получаем изображения из VK
-      const newImages = await VK.get(userId);
-
+    // Получаем изображения из VK через callback
+    VK.get(userId, (error, newImages) => {
       // Скрываем лоадер
       this.hideLoader();
 
+      if (error) {
+        console.error('Error adding images:', error);
+        this.showError(`Ошибка добавления: ${error.message}`);
+        return;
+      }
+
       // Добавляем к существующим изображениям
       const imageViewer = App.getImageViewer();
-      if (imageViewer) {
+      if (imageViewer && newImages) {
         const currentImages = imageViewer.images || [];
         const allImages = [...currentImages, ...newImages];
 
@@ -129,13 +132,8 @@ class SearchBlock {
       }
 
       // Показываем успешный результат
-      this.showSuccess(`Добавлено ${newImages.length} изображений из профиля VK`);
-
-    } catch (error) {
-      this.hideLoader();
-      console.error('Error adding images:', error);
-      this.showError(`Ошибка добавления: ${error.message}`);
-    }
+      this.showSuccess(`Добавлено ${newImages ? newImages.length : 0} изображений из профиля VK`);
+    });
   }
 
   /**

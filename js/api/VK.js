@@ -4,13 +4,9 @@
  * С помощью этого класса будет выполняться загрузка изображений из vk.
  * Имеет свойства ACCESS_TOKEN и lastCallback
  */
-
-// Импортируем createRequest
-import createRequest from '../api/createRequest.js';
-
 class VK {
   static ACCESS_TOKEN = '958eb5d439726565e9333aa30e50e0f937ee432e927f0dbd541c541887d919a7c56f95c04217915c32008';
-  static lastCallback;
+  static lastCallback = () => {}; // Функция-пустышка по умолчанию
   static API_VERSION = '5.131';
   static BASE_URL = 'https://api.vk.com/method';
 
@@ -18,94 +14,150 @@ class VK {
    * Получает изображения
    */
   static get(id = '', callback) {
-    // Сохраняем callback для обратной совместимости
+    // Сохраняем callback в свойство lastCallback
     this.lastCallback = callback;
 
     try {
       const ownerId = this.parseUserId(id);
 
-      // Используем JSONP для VK API
-      return createRequest({
-        url: `${this.BASE_URL}/photos.get`,
-        method: 'GET',
-        useJsonp: true, // Явно указываем использовать JSONP
-        params: {
-          owner_id: ownerId,
-          album_id: 'profile',
-          access_token: this.ACCESS_TOKEN,
-          v: this.API_VERSION,
-          rev: 1,
-          extended: 1,
-          photo_sizes: 1,
-          count: 100
-        },
-        callback: callback ? (error, data) => {
-          if (error) {
-            callback(error, null);
-            return;
-          }
+      if (!ownerId) {
+        const error = new Error('User ID is required');
+        if (callback) callback(error, null);
+        return;
+      }
 
-          // Обрабатываем ответ VK API
-          if (data.error) {
-            const vkError = new Error(`VK API Error: ${data.error.error_msg} (code: ${data.error.error_code})`);
-            callback(vkError, null);
-            return;
-          }
+      // Создаем тег script для JSONP запроса
+      const script = document.createElement('script');
 
-          try {
-            const photos = this.processPhotos(data.response);
-            callback(null, photos);
-          } catch (processError) {
-            callback(processError, null);
-          }
-        } : undefined
-      }).then(data => {
-        // Promise-версия обработки
-        if (data.error) {
-          throw new Error(`VK API Error: ${data.error.error_msg} (code: ${data.error.error_code})`);
+      // Генерируем уникальное имя для callback функции
+      const callbackName = 'vk_callback_' + Date.now() + '_' + Math.random().toString(36).substr(2);
+
+      // Регистрируем глобальную callback функцию
+      window[callbackName] = (response) => {
+        // Обрабатываем ответ
+        this.processData(response, callbackName, script);
+      };
+
+      // Формируем URL запроса
+      let url = `${this.BASE_URL}/photos.get?`;
+      const params = {
+        owner_id: ownerId,
+        album_id: 'profile',
+        access_token: this.ACCESS_TOKEN,
+        v: this.API_VERSION,
+        rev: 1,
+        extended: 1,
+        photo_sizes: 1,
+        count: 100,
+        callback: callbackName
+      };
+
+      // Добавляем параметры в URL
+      const urlParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null) {
+          urlParams.append(key, params[key]);
+        }
+      });
+      url += urlParams.toString();
+
+      // Настраиваем тег script
+      script.src = url;
+      script.type = 'text/javascript';
+      script.async = true;
+      script.id = callbackName; // Сохраняем ID для удаления
+
+      // Добавляем обработчик ошибок
+      script.onerror = () => {
+        // Удаляем callback из глобальной области
+        delete window[callbackName];
+
+        // Удаляем тег script
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
         }
 
-        const photos = this.processPhotos(data.response);
-        return photos;
-      });
+        // Вызываем callback с ошибкой
+        const error = new Error('Ошибка загрузки данных из VK');
+        if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+          this.lastCallback(error, null);
+          this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
+        }
+      };
+
+      // Добавляем тег script в тело документа
+      document.body.appendChild(script);
 
     } catch (error) {
-      if (callback) {
-        callback(error, null);
+      if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+        this.lastCallback(error, null);
+        this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
       }
-      return Promise.reject(error);
     }
   }
 
   /**
-   * Парсит ID пользователя из различных форматов
+   * Обрабатывает данные ответа от VK API
    */
-  static parseUserId(id) {
-    if (!id || id === 'me') {
-      return ''; // Будет использован ID текущего пользователя
-    }
+  static processData(response, callbackName, script) {
+    try {
+      // Удаляем тег script из документа
+      if (script && script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
 
-    // Если это числовой ID
-    if (/^\d+$/.test(id)) {
-      return id;
-    }
+      // Удаляем callback из глобальной области
+      if (window[callbackName]) {
+        delete window[callbackName];
+      }
 
-    // Если это короткое имя (screen_name)
-    if (/^[a-zA-Z0-9_.]+$/.test(id)) {
-      return id;
-    }
+      // Проверяем наличие ошибок в ответе
+      if (response.error) {
+        const errorMessage = `VK API Error: ${response.error.error_msg} (code: ${response.error.error_code})`;
+        alert(errorMessage);
 
-    throw new Error('Invalid user ID format');
+        if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+          this.lastCallback(new Error(errorMessage), null);
+          this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
+        }
+        return;
+      }
+
+      // Проверяем корректность структуры ответа
+      if (!response.response || !response.response.items || !Array.isArray(response.response.items)) {
+        alert('Некорректный формат ответа от VK API');
+
+        if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+          this.lastCallback(new Error('Некорректный формат ответа'), null);
+          this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
+        }
+        return;
+      }
+
+      // Находим самые крупные изображения
+      const photos = this.processPhotos(response.response);
+
+      // Вызываем сохраненный callback с результатом
+      if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+        this.lastCallback(null, photos);
+        this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
+      }
+
+    } catch (error) {
+      console.error('Ошибка обработки данных VK:', error);
+      alert(`Ошибка обработки данных: ${error.message}`);
+
+      if (this.lastCallback && this.lastCallback !== this.emptyCallback) {
+        this.lastCallback(error, null);
+        this.lastCallback = () => {}; // Сбрасываем на функцию-пустышку
+      }
+    }
   }
 
   /**
    * Обрабатывает полученные фотографии
    */
   static processPhotos(response) {
-    if (!response || !response.items || !Array.isArray(response.items)) {
-      throw new Error('Invalid response format from VK API');
-    }
-
     return response.items.map(photo => ({
       id: photo.id,
       owner_id: photo.owner_id,
@@ -134,6 +186,7 @@ class VK {
       }
     }
 
+    // Если не нашли по типам, возвращаем самый большой по ширине
     return sizes.reduce((largest, current) =>
       current.width > largest.width ? current : largest
     ).url;
@@ -164,22 +217,30 @@ class VK {
   }
 
   /**
-   * Получает информацию о пользователе
+   * Парсит ID пользователя из различных форматов
    */
-  static getUserInfo(userId, callback) {
-    return createRequest({
-      url: `${this.BASE_URL}/users.get`,
-      method: 'GET',
-      useJsonp: true,
-      params: {
-        user_ids: this.parseUserId(userId),
-        access_token: this.ACCESS_TOKEN,
-        v: this.API_VERSION,
-        fields: 'photo_max,photo_max_orig,domain,first_name,last_name'
-      },
-      callback: callback
-    });
+  static parseUserId(id) {
+    if (!id || id === 'me') {
+      return ''; // Будет использован ID текущего пользователя
+    }
+
+    // Если это числовой ID
+    if (/^\d+$/.test(id)) {
+      return id;
+    }
+
+    // Если это короткое имя (screen_name)
+    if (/^[a-zA-Z0-9_.]+$/.test(id)) {
+      return id;
+    }
+
+    throw new Error('Invalid user ID format');
   }
+
+  /**
+   * Функция-пустышка для сброса lastCallback
+   */
+  static emptyCallback() {}
 }
 
 export default VK;
