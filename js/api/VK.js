@@ -4,6 +4,10 @@
  * С помощью этого класса будет выполняться загрузка изображений из vk.
  * Имеет свойства ACCESS_TOKEN и lastCallback
  */
+
+// Импортируем createRequest
+import createRequest from '../api/createRequest.js';
+
 class VK {
   static ACCESS_TOKEN = '958eb5d439726565e9333aa30e50e0f937ee432e927f0dbd541c541887d919a7c56f95c04217915c32008';
   static lastCallback;
@@ -20,10 +24,11 @@ class VK {
     try {
       const ownerId = this.parseUserId(id);
 
-      // Используем createRequest вместо fetch
+      // Используем JSONP для VK API
       return createRequest({
         url: `${this.BASE_URL}/photos.get`,
         method: 'GET',
+        useJsonp: true, // Явно указываем использовать JSONP
         params: {
           owner_id: ownerId,
           album_id: 'profile',
@@ -32,7 +37,7 @@ class VK {
           rev: 1,
           extended: 1,
           photo_sizes: 1,
-          count: 1000
+          count: 100
         },
         callback: callback ? (error, data) => {
           if (error) {
@@ -165,84 +170,14 @@ class VK {
     return createRequest({
       url: `${this.BASE_URL}/users.get`,
       method: 'GET',
+      useJsonp: true,
       params: {
         user_ids: this.parseUserId(userId),
         access_token: this.ACCESS_TOKEN,
         v: this.API_VERSION,
         fields: 'photo_max,photo_max_orig,domain,first_name,last_name'
       },
-      callback: callback ? (error, data) => {
-        if (error) {
-          callback(error, null);
-          return;
-        }
-
-        if (data.error) {
-          callback(new Error(`VK API Error: ${data.error.error_msg}`), null);
-          return;
-        }
-
-        if (data.response && data.response.length > 0) {
-          callback(null, data.response[0]);
-        } else {
-          callback(new Error('User not found'), null);
-        }
-      } : undefined
-    }).then(data => {
-      if (data.error) {
-        throw new Error(`VK API Error: ${data.error.error_msg}`);
-      }
-
-      if (data.response && data.response.length > 0) {
-        return data.response[0];
-      }
-
-      throw new Error('User not found');
-    });
-  }
-
-  /**
-   * Получает фотографии из определенного альбома
-   */
-  static getAlbumPhotos(userId, albumId = 'profile', callback) {
-    this.lastCallback = callback;
-
-    return createRequest({
-      url: `${this.BASE_URL}/photos.get`,
-      method: 'GET',
-      params: {
-        owner_id: this.parseUserId(userId),
-        album_id: albumId,
-        access_token: this.ACCESS_TOKEN,
-        v: this.API_VERSION,
-        extended: 1,
-        photo_sizes: 1,
-        count: 1000
-      },
-      callback: callback ? (error, data) => {
-        if (error) {
-          callback(error, null);
-          return;
-        }
-
-        if (data.error) {
-          callback(new Error(`VK API Error: ${data.error.error_msg}`), null);
-          return;
-        }
-
-        try {
-          const photos = this.processPhotos(data.response);
-          callback(null, photos);
-        } catch (processError) {
-          callback(processError, null);
-        }
-      } : undefined
-    }).then(data => {
-      if (data.error) {
-        throw new Error(`VK API Error: ${data.error.error_msg}`);
-      }
-
-      return this.processPhotos(data.response);
+      callback: callback
     });
   }
 }

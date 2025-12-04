@@ -1,5 +1,6 @@
 /**
- * Основная функция для совершения запросов по Yandex API.
+ * Основная функция для совершения запросов
+ * Поддерживает как XMLHttpRequest, так и JSONP
  */
 const createRequest = (options = {}) => {
     return new Promise((resolve, reject) => {
@@ -11,224 +12,188 @@ const createRequest = (options = {}) => {
             return;
         }
 
-        const xhr = new XMLHttpRequest();
-
-        // Формируем URL с query параметрами
-        let url = options.url;
-        if (options.params && Object.keys(options.params).length > 0) {
-            const urlParams = new URLSearchParams();
-            Object.keys(options.params).forEach(key => {
-                if (options.params[key] !== undefined && options.params[key] !== null) {
-                    urlParams.append(key, options.params[key]);
-                }
-            });
-            url += '?' + urlParams.toString();
-        }
-
-        xhr.open(options.method || 'GET', url);
-
-        // Устанавливаем заголовки
-        if (options.headers) {
-            Object.keys(options.headers).forEach(key => {
-                xhr.setRequestHeader(key, options.headers[key]);
-            });
-        }
-
-        // Для POST/PUT запросов устанавливаем Content-Type по умолчанию
-        if ((options.method === 'POST' || options.method === 'PUT') && options.data) {
-            if (!options.headers || !options.headers['Content-Type']) {
-                xhr.setRequestHeader('Content-Type', 'application/json');
-            }
-        }
-
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    let response = null;
-
-                    // Обрабатываем пустой ответ или ответ с текстом
-                    if (xhr.responseText) {
-                        response = JSON.parse(xhr.responseText);
-                    }
-
-                    // Вызываем callback если он предоставлен
-                    if (options.callback && typeof options.callback === 'function') {
-                        options.callback(null, response);
-                    }
-
-                    resolve(response);
-                } catch (error) {
-                    const parseError = new Error(`Failed to parse response: ${error.message}`);
-
-                    if (options.callback && typeof options.callback === 'function') {
-                        options.callback(parseError, null);
-                    }
-
-                    reject(parseError);
-                }
-            } else {
-                let errorMessage = `HTTP Error ${xhr.status}: ${xhr.statusText}`;
-                let errorResponse = null;
-
-                try {
-                    if (xhr.responseText) {
-                        errorResponse = JSON.parse(xhr.responseText);
-                        if (errorResponse && errorResponse.error) {
-                            errorMessage = errorResponse.error.error_msg || errorResponse.error.message || errorMessage;
-                        }
-                    }
-                } catch (e) {
-                    // Если не удалось распарсить ошибку, используем стандартное сообщение
-                }
-
-                const error = new Error(errorMessage);
-                error.status = xhr.status;
-                error.response = errorResponse;
-
-                if (options.callback && typeof options.callback === 'function') {
-                    options.callback(error, null);
-                }
-
-                reject(error);
-            }
-        };
-
-        xhr.onerror = function() {
-            const error = new Error('Network error occurred. Check CORS settings or network connection.');
-
-            if (options.callback && typeof options.callback === 'function') {
-                options.callback(error, null);
-            }
-
-            reject(error);
-        };
-
-        xhr.ontimeout = function() {
-            const error = new Error('Request timeout');
-
-            if (options.callback && typeof options.callback === 'function') {
-                options.callback(error, null);
-            }
-
-            reject(error);
-        };
-
-        // Устанавливаем таймаут (по умолчанию 30 секунд)
-        xhr.timeout = options.timeout || 30000;
-
-        // Отправляем запрос
-        try {
-            if ((options.method === 'POST' || options.method === 'PUT') && options.data) {
-                // Определяем тип тела запроса
-                let body;
-                if (options.headers && options.headers['Content-Type'] === 'application/json') {
-                    body = JSON.stringify(options.data);
-                } else if (options.headers && options.headers['Content-Type'] === 'application/x-www-form-urlencoded') {
-                    body = new URLSearchParams(options.data).toString();
-                } else {
-                    body = options.data;
-                }
-                xhr.send(body);
-            } else {
-                xhr.send();
-            }
-        } catch (error) {
-            if (options.callback && typeof options.callback === 'function') {
-                options.callback(error, null);
-            }
-            reject(error);
+        // Для VK API используем JSONP, для остальных - XMLHttpRequest
+        if (options.useJsonp || options.url.includes('api.vk.com')) {
+            createJsonpRequest(options, resolve, reject);
+        } else {
+            createXhrRequest(options, resolve, reject);
         }
     });
 };
 
-// Вспомогательные функции для конкретных API
-
 /**
- * Создает запрос для VK API
+ * Создает JSONP запрос (для VK API)
  */
-createRequest.vk = (method, params = {}, callback) => {
-    return createRequest({
-        url: `https://api.vk.com/method/${method}`,
-        method: 'GET',
-        params: {
-            ...params,
-            v: '5.131'
-        },
-        callback
-    });
-};
+function createJsonpRequest(options, resolve, reject) {
+    // Создаем уникальное имя для callback функции
+    const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
 
-/**
- * Создает запрос для Yandex Disk API
- */
-createRequest.yandex = (endpoint, options = {}, callback) => {
-    const token = localStorage.getItem('yandexToken');
+    // Создаем script элемент
+    const script = document.createElement('script');
 
-    if (!token) {
-        const error = new Error('Yandex token is not set');
-        if (callback) callback(error, null);
-        return Promise.reject(error);
+    // Формируем URL с параметрами
+    let url = options.url;
+    if (options.params) {
+        const urlParams = new URLSearchParams();
+        Object.keys(options.params).forEach(key => {
+            if (options.params[key] !== undefined && options.params[key] !== null) {
+                urlParams.append(key, options.params[key]);
+            }
+        });
+        url += (url.includes('?') ? '&' : '?') + urlParams.toString();
     }
 
-    return createRequest({
-        url: `https://cloud-api.yandex.net/v1/disk${endpoint}`,
-        method: options.method || 'GET',
-        headers: {
-            'Authorization': `OAuth ${token}`,
-            ...options.headers
-        },
-        params: options.params,
-        data: options.data,
-        callback
-    });
-};
+    // Добавляем callback параметр
+    url += (url.includes('?') ? '&' : '?') + `callback=${callbackName}`;
+
+    // Устанавливаем атрибуты скрипта
+    script.src = url;
+    script.async = true;
+    script.type = 'text/javascript';
+
+    // Определяем глобальную callback функцию
+    window[callbackName] = function(response) {
+        // Очищаем
+        delete window[callbackName];
+        document.body.removeChild(script);
+
+        // Вызываем callback если он предоставлен
+        if (options.callback && typeof options.callback === 'function') {
+            options.callback(null, response);
+        }
+
+        resolve(response);
+    };
+
+    // Обработка ошибок
+    script.onerror = function() {
+        delete window[callbackName];
+        document.body.removeChild(script);
+
+        const error = new Error('JSONP request failed');
+
+        if (options.callback && typeof options.callback === 'function') {
+            options.callback(error, null);
+        }
+
+        reject(error);
+    };
+
+    // Добавляем таймаут
+    const timeout = options.timeout || 30000;
+    setTimeout(() => {
+        if (window[callbackName]) {
+            delete window[callbackName];
+            document.body.removeChild(script);
+
+            const error = new Error('JSONP request timeout');
+
+            if (options.callback && typeof options.callback === 'function') {
+                options.callback(error, null);
+            }
+
+            reject(error);
+        }
+    }, timeout);
+
+    // Добавляем скрипт на страницу
+    document.body.appendChild(script);
+}
 
 /**
- * Упрощенная версия для GET запросов
+ * Создает XMLHttpRequest (для Яндекс API)
  */
-createRequest.get = (url, params = {}, callback) => {
-    return createRequest({
-        url,
-        method: 'GET',
-        params,
-        callback
-    });
-};
+function createXhrRequest(options, resolve, reject) {
+    const xhr = new XMLHttpRequest();
 
-/**
- * Упрощенная версия для POST запросов
- */
-createRequest.post = (url, data = {}, callback) => {
-    return createRequest({
-        url,
-        method: 'POST',
-        data,
-        callback
-    });
-};
+    // Формируем URL с query параметрами
+    let url = options.url;
+    if (options.params && Object.keys(options.params).length > 0) {
+        const urlParams = new URLSearchParams();
+        Object.keys(options.params).forEach(key => {
+            if (options.params[key] !== undefined && options.params[key] !== null) {
+                urlParams.append(key, options.params[key]);
+            }
+        });
+        url += '?' + urlParams.toString();
+    }
 
-/**
- * Упрощенная версия для PUT запросов
- */
-createRequest.put = (url, data = {}, callback) => {
-    return createRequest({
-        url,
-        method: 'PUT',
-        data,
-        callback
-    });
-};
+    xhr.open(options.method || 'GET', url);
 
-/**
- * Упрощенная версия для DELETE запросов
- */
-createRequest.delete = (url, params = {}, callback) => {
-    return createRequest({
-        url,
-        method: 'DELETE',
-        params,
-        callback
-    });
-};
+    // Устанавливаем заголовки
+    if (options.headers) {
+        Object.keys(options.headers).forEach(key => {
+            xhr.setRequestHeader(key, options.headers[key]);
+        });
+    }
+
+    xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+                const response = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+
+                if (options.callback && typeof options.callback === 'function') {
+                    options.callback(null, response);
+                }
+
+                resolve(response);
+            } catch (error) {
+                const parseError = new Error(`Failed to parse response: ${error.message}`);
+
+                if (options.callback && typeof options.callback === 'function') {
+                    options.callback(parseError, null);
+                }
+
+                reject(parseError);
+            }
+        } else {
+            const error = new Error(`HTTP Error ${xhr.status}: ${xhr.statusText}`);
+
+            if (options.callback && typeof options.callback === 'function') {
+                options.callback(error, null);
+            }
+
+            reject(error);
+        }
+    };
+
+    xhr.onerror = function() {
+        const error = new Error('Network error occurred');
+
+        if (options.callback && typeof options.callback === 'function') {
+            options.callback(error, null);
+        }
+
+        reject(error);
+    };
+
+    xhr.ontimeout = function() {
+        const error = new Error('Request timeout');
+
+        if (options.callback && typeof options.callback === 'function') {
+            options.callback(error, null);
+        }
+
+        reject(error);
+    };
+
+    xhr.timeout = options.timeout || 30000;
+
+    try {
+        if ((options.method === 'POST' || options.method === 'PUT') && options.data) {
+            const body = options.headers && options.headers['Content-Type'] === 'application/json'
+                ? JSON.stringify(options.data)
+                : options.data;
+            xhr.send(body);
+        } else {
+            xhr.send();
+        }
+    } catch (error) {
+        if (options.callback && typeof options.callback === 'function') {
+            options.callback(error, null);
+        }
+        reject(error);
+    }
+}
 
 export default createRequest;

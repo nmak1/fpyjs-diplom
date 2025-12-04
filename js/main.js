@@ -12,6 +12,7 @@ import PreviewModal from './ui/Modals/PreviewModal.js';
 window.App = App;
 window.VK = VK;
 window.Yandex = Yandex;
+window.createRequest = createRequest; // Добавляем в глобальную область
 window.SearchBlock = SearchBlock;
 window.ImageViewer = ImageViewer;
 window.FileUploaderModal = FileUploaderModal;
@@ -30,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Проверяем доступность классов
         console.log('App class:', typeof App);
+        console.log('VK class:', typeof VK);
+        console.log('createRequest:', typeof createRequest);
         console.log('FileUploaderModal class:', typeof FileUploaderModal);
         console.log('PreviewModal class:', typeof PreviewModal);
 
@@ -83,3 +86,30 @@ function testAppFunctionality() {
         if (!previewModal) console.log('❌ PreviewModal не загружен');
     }
 }
+
+
+window.testVKJsonp = function(userId = '1') {
+    console.log(`🧪 Тестируем VK API с JSONP для userId: ${userId}`);
+
+    // Прямой тест JSONP
+    const callbackName = 'test_vk_callback_' + Date.now();
+
+    const script = document.createElement('script');
+    const url = `https://api.vk.com/method/users.get?user_ids=${userId}&v=5.131&callback=${callbackName}`;
+
+    script.src = url;
+
+    window[callbackName] = function(response) {
+        console.log('✅ JSONP работает! Ответ:', response);
+        delete window[callbackName];
+        document.body.removeChild(script);
+    };
+
+    script.onerror = function() {
+        console.error('❌ JSONP не работает');
+        delete window[callbackName];
+        document.body.removeChild(script);
+    };
+
+    document.body.appendChild(script);
+};

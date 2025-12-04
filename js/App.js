@@ -1,6 +1,15 @@
 /**
  * Класс App управляет всем приложением
  */
+
+// Импортируем необходимые классы
+import SearchBlock from './ui/SearchBlock.js';
+import ImageViewer from './ui/ImageViewer.js';
+import FileUploaderModal from './ui/Modals/FileUploaderModal.js';
+import PreviewModal from './ui/Modals/PreviewModal.js';
+import VK from './api/VK.js';
+import Yandex from './api/Yandex.js';
+
 class App {
   /**
    * С вызова этого метода начинается работа всего приложения
@@ -139,16 +148,32 @@ class App {
    * Показывает уведомление об ошибке
    */
   static showErrorNotification(message) {
-    // Используем Semantic UI для показа уведомлений
-    if (typeof $ !== 'undefined') {
-      $('body').toast({
-        class: 'error',
-        message: message,
-        showIcon: 'exclamation circle'
-      });
-    } else {
-      console.error('Error notification:', message);
-    }
+    // Простая реализация без Semantic UI toast
+    console.error('Error notification:', message);
+
+    // Можно создать простое уведомление
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #db2828;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 5px;
+      z-index: 10000;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    // Автоматическое удаление через 5 секунд
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
   }
 
   /**
